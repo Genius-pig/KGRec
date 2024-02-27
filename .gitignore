@@ -233,3 +233,5 @@ pyrightconfig.json
 tuner.py
 logs/
 *.log
+
+.idea/
