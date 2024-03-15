@@ -16,11 +16,10 @@ from utils.parser import parse_args_kgin as parse_args
 from utils.data_loader import load_data
 from modules.KGIN.KGIN import Recommender
 from utils.evaluate import test
-from utils.helper import early_stopping
+from utils.helper import early_stopping, init_logger
+from logging import getLogger
 
 setproctitle.setproctitle('EXP@KGIN')
-# print PID
-print('PID: ', os.getpid())
 
 n_users = 0
 n_items = 0
@@ -66,6 +65,11 @@ if __name__ == '__main__':
     args = parse_args()
     device = torch.device("cuda:"+str(args.gpu_id)) if args.cuda else torch.device("cpu")
 
+    log_fn = init_logger(args)
+    logger = getLogger()
+
+    logger.info('PID: %d', os.getpid())
+    logger.info(f"DESC: {args.desc}\n")
     """build dataset"""
     train_cf, test_cf, user_dict, n_params, graph, mat_list = load_data(args)
     adj_mat_list, norm_mat_list, mean_mat_list = mat_list
@@ -87,10 +91,11 @@ if __name__ == '__main__':
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
 
     cur_best_pre_0 = 0
+    ndcg = 0
     stopping_step = 0
     should_stop = False
 
-    print("start training ...")
+    logger.info("start training ...")
     for epoch in range(args.epoch):
         """training CF"""
         # shuffle training data
@@ -131,13 +136,14 @@ if __name__ == '__main__':
             train_res.add_row(
                 [epoch, train_e_t - train_s_t, test_e_t - test_s_t, loss.item(), ret['recall'], ret['ndcg'], ret['precision'], ret['hit_ratio']]
             )
-            print(train_res)
+            logger.info(train_res)
 
             # *********************************************************
             # early stopping when cur_best_pre_0 is decreasing for ten successive steps.
             cur_best_pre_0, stopping_step, should_stop = early_stopping(ret['recall'][0], cur_best_pre_0,
                                                                         stopping_step, expected_order='acc',
                                                                         flag_step=10)
+            ndcg = ret['ndcg'][0]
             if should_stop:
                 break
 
@@ -147,6 +153,6 @@ if __name__ == '__main__':
 
         else:
             # logging.info('training loss at epoch %d: %f' % (epoch, loss.item()))
-            print('using time %.4f, training loss at epoch %d: %.4f, cor: %.6f' % (train_e_t - train_s_t, epoch, loss.item(), cor_loss.item()))
+            logger.info('using time %.4f, training loss at epoch %d: %.4f, cor: %.6f' % (train_e_t - train_s_t, epoch, loss.item(), cor_loss.item()))
 
-    print('early stopping at %d, recall@20:%.4f' % (epoch, cur_best_pre_0))
+    logger.info('early stopping at %d, recall@20:%.4f, ngcg@20:%.4f' % (epoch, cur_best_pre_0, ndcg))

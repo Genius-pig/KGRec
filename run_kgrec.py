@@ -99,6 +99,7 @@ if __name__ == '__main__':
         early_stop_step = 5 if args.dataset == 'last-fm' else 10
 
         cur_best_pre_0 = 0
+        ndcg = 0
         cur_stopping_step = 0
         should_stop = False
 
@@ -151,6 +152,7 @@ if __name__ == '__main__':
                 # *********************************************************
                 # early stopping when cur_best_pre_0 is decreasing for ten successive steps.
                 cur_best_pre_0, cur_stopping_step, should_stop = early_stopping(ret['recall'][0], cur_best_pre_0,cur_stopping_step, expected_order='acc', flag_step=early_stop_step)
+                ndcg = ret['ndcg'][0]
                 if cur_stopping_step == 0:
                     logger.info("###find better!")
                 elif should_stop:
@@ -166,7 +168,7 @@ if __name__ == '__main__':
                 # logging.info('training loss at epoch %d: %f' % (epoch, loss.item()))
                 logger.info('{}: using time {}, training loss at epoch {}: {}'.format(datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'), train_e_t - train_s_t, epoch, list(add_loss_dict.values())))
 
-        logger.info('early stopping at %d, recall@20:%.4f' % (epoch, cur_best_pre_0))
+        logger.info('early stopping at %d, recall@20:%.4f, ngcg@20:%.4f' % (epoch, cur_best_pre_0, ndcg))
 
     except Exception as e:
         logger.exception(e)
