@@ -235,3 +235,5 @@ logs/
 *.log
 
 .idea/
+
+weights/
