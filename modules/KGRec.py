@@ -1,4 +1,3 @@
-
 from utils.timer import TimeCounter
 import random
 import numpy as np
@@ -15,14 +14,15 @@ from scipy import sparse as sp
 
 def _adaptive_kg_drop_cl(edge_index, edge_type, edge_attn_score, keep_rate):
     _, least_attn_edge_id = torch.topk(-edge_attn_score,
-                                       int((1-keep_rate) * edge_attn_score.shape[0]), sorted=False)
+                                       int((1 - keep_rate) * edge_attn_score.shape[0]), sorted=False)
     cl_kg_mask = torch.ones_like(edge_attn_score).bool()
     cl_kg_mask[least_attn_edge_id] = False
     cl_kg_edge = edge_index[:, cl_kg_mask]
     cl_kg_type = edge_type[cl_kg_mask]
     return cl_kg_edge, cl_kg_type
 
-def _adaptive_ui_drop_cl(item_attn_mean, inter_edge, inter_edge_w, keep_rate=0.7, samp_func = "torch"):
+
+def _adaptive_ui_drop_cl(item_attn_mean, inter_edge, inter_edge_w, keep_rate=0.7, samp_func="torch"):
     inter_attn_prob = item_attn_mean[inter_edge[1]]
     # add gumbel noise
     noise = -torch.log(-torch.log(torch.rand_like(inter_attn_prob)))
@@ -32,11 +32,13 @@ def _adaptive_ui_drop_cl(item_attn_mean, inter_edge, inter_edge_w, keep_rate=0.7
 
     if samp_func == "np":
         # we observed abnormal behavior of torch.multinomial on mind
-        sampled_edge_idx = np.random.choice(np.arange(inter_edge_w.shape[0]), size=int(keep_rate * inter_edge_w.shape[0]), replace=False, p=inter_attn_prob.cpu().numpy())
+        sampled_edge_idx = np.random.choice(np.arange(inter_edge_w.shape[0]),
+                                            size=int(keep_rate * inter_edge_w.shape[0]), replace=False,
+                                            p=inter_attn_prob.cpu().numpy())
     else:
         sampled_edge_idx = torch.multinomial(inter_attn_prob, int(keep_rate * inter_edge_w.shape[0]), replacement=False)
 
-    return inter_edge[:, sampled_edge_idx], inter_edge_w[sampled_edge_idx]/keep_rate
+    return inter_edge[:, sampled_edge_idx], inter_edge_w[sampled_edge_idx] / keep_rate
 
 
 def _relation_aware_edge_sampling(edge_index, edge_type, n_relations, samp_rate=0.5):
@@ -77,6 +79,7 @@ def _mae_edge_mask_adapt_mixed(edge_index, edge_type, topk_egde_id):
 
     return remain_edge_index, remain_edge_type, masked_edge_index, masked_edge_type, mask
 
+
 def _edge_sampling(edge_index, edge_type, samp_rate=0.5):
     # edge_index: [2, -1]
     # edge_type: [-1]
@@ -111,7 +114,9 @@ class KGRec(nn.Module):
         self.n_relations = data_config['n_relations']
         self.n_entities = data_config['n_entities']  # include items
         self.n_nodes = data_config['n_nodes']  # n_users + n_entities
-
+        self.n_factors = args_config.n_factors
+        self.ind = args_config.ind
+        self.sim_decay = args_config.sim_regularity
         self.decay = args_config.l2
         self.emb_size = args_config.dim
         self.context_hops = args_config.context_hops
@@ -121,7 +126,7 @@ class KGRec(nn.Module):
         self.mess_dropout_rate = args_config.mess_dropout_rate
         self.device = torch.device("cuda:" + str(args_config.gpu_id)) if args_config.cuda \
             else torch.device("cpu")
-        
+
         self.ablation = args_config.ab
 
         self.mae_coef = args_config.mae_coef
@@ -151,26 +156,30 @@ class KGRec(nn.Module):
             self.cl_coef = 0.001
             self.tau = 0.2
             self.cl_drop = 0.5
-        
+
         # update hps
         if hp_dict is not None:
-            for k,v in hp_dict.items():
+            for k, v in hp_dict.items():
                 setattr(self, k, v)
 
         self.inter_edge, self.inter_edge_w = self._convert_sp_mat_to_tensor(
             adj_mat)
-
+        self.adj_mat = adj_mat
         self.edge_index, self.edge_type = self._get_edges(graph)
 
         self._init_weight()
         self.all_embed = nn.Parameter(self.all_embed)
+        self.latent_emb = nn.Parameter(self.latent_emb)
 
         self.gcn = AttnHGCN(channel=self.emb_size,
-                       n_hops=self.context_hops,
-                       n_users=self.n_users,
-                       n_relations=self.n_relations,
-                       node_dropout_rate=self.node_dropout_rate,
-                       mess_dropout_rate=self.mess_dropout_rate)
+                            n_hops=self.context_hops,
+                            n_users=self.n_users,
+                            n_relations=self.n_relations,
+                            n_factors=self.n_factors,
+                            ind=self.ind,
+                            interact_mat=self.interact_mat,
+                            node_dropout_rate=self.node_dropout_rate,
+                            mess_dropout_rate=self.mess_dropout_rate)
         self.contrast_fn = Contrast(self.emb_size, tau=self.tau)
 
         # self.print_shapes()
@@ -178,12 +187,20 @@ class KGRec(nn.Module):
     def _init_weight(self):
         initializer = nn.init.xavier_uniform_
         self.all_embed = initializer(torch.empty(self.n_nodes, self.emb_size))
+        self.latent_emb = initializer(torch.empty(self.n_factors, self.emb_size))
+        self.interact_mat = self._convert_sp_mat_to_sp_tensor_m(self.adj_mat).to(self.device)
 
     def _convert_sp_mat_to_tensor(self, X):
         coo = X.tocoo()
         i = torch.LongTensor([coo.row, coo.col])
         v = torch.from_numpy(coo.data).float()
         return i.to(self.device), v.to(self.device)
+
+    def _convert_sp_mat_to_sp_tensor_m(self, X):
+        coo = X.tocoo()
+        i = torch.LongTensor([coo.row, coo.col])
+        v = torch.from_numpy(coo.data).float()
+        return torch.sparse.FloatTensor(i, v, coo.shape)
 
     def _get_indices(self, X):
         coo = X.tocoo()
@@ -226,32 +243,39 @@ class KGRec(nn.Module):
             edge_attn_score, self.mae_msize, sorted=False)
         top_attn_edge_type = edge_type[topk_attn_edge_id]
 
-        enc_edge_index, enc_edge_type, masked_edge_index, masked_edge_type, mask_bool = _mae_edge_mask_adapt_mixed(edge_index, edge_type, topk_attn_edge_id)
+        enc_edge_index, enc_edge_type, masked_edge_index, masked_edge_type, mask_bool = _mae_edge_mask_adapt_mixed(
+            edge_index, edge_type, topk_attn_edge_id)
 
         inter_edge, inter_edge_w = _sparse_dropout(
             self.inter_edge, self.inter_edge_w, self.node_dropout_rate)
 
         # rec task
-        entity_gcn_emb, user_gcn_emb = self.gcn(user_emb,
-                                                item_emb,
-                                                enc_edge_index,
-                                                enc_edge_type,
-                                                inter_edge,
-                                                inter_edge_w,
-                                                mess_dropout=self.mess_dropout,
-                                                )
+        entity_gcn_emb, user_gcn_emb, cor = self.gcn(user_emb,
+                                                     item_emb,
+                                                     self.latent_emb,
+                                                     self.edge_index,
+                                                     self.edge_type,
+                                                     inter_edge,
+                                                     self.inter_edge_w,
+                                                     self.interact_mat,
+                                                     mess_dropout=self.mess_dropout,
+                                                     node_dropout=self.node_dropout
+                                                     )
+
+        # self, user_emb, entity_emb, latent_emb, edge_index, edge_type,
+        # inter_edge, inter_edge_w, interact_mat, mess_dropout = True, item_attn = None, node_dropout = False
         u_e = user_gcn_emb[user]
         pos_e, neg_e = entity_gcn_emb[pos_item], entity_gcn_emb[neg_item]
 
-        loss, rec_loss, reg_loss = self.create_bpr_loss(u_e, pos_e, neg_e)
+        loss, rec_loss, reg_loss, batch_cor = self.create_bpr_loss(u_e, pos_e, neg_e, cor)
 
         # MAE task with dot-product decoder
         # mask_size, 2, channel
         node_pair_emb = entity_gcn_emb[masked_edge_index.t()]
         # mask_size, channel
-        masked_edge_emb = self.gcn.relation_emb[masked_edge_type-1]
+        masked_edge_emb = self.gcn.relation_emb[masked_edge_type - 1]
         mae_loss = self.mae_coef * \
-            self.create_mae_loss(node_pair_emb, masked_edge_emb)
+                   self.create_mae_loss(node_pair_emb, masked_edge_emb)
 
         # CL task
         """adaptive sampling"""
@@ -260,18 +284,16 @@ class KGRec(nn.Module):
         cl_ui_edge, cl_ui_w = _adaptive_ui_drop_cl(
             item_attn_mean, inter_edge, inter_edge_w, 1-self.cl_drop, samp_func=self.samp_func)
 
-        item_agg_ui = self.gcn.forward_ui(
+        user_agg_ui = self.gcn.forward_ui(
             user_emb, item_emb[:self.n_items], cl_ui_edge, cl_ui_w)
-        item_agg_kg = self.gcn.forward_kg(
-            item_emb, cl_kg_edge, cl_kg_type)[:self.n_items]
-        cl_loss = self.cl_coef * self.contrast_fn(item_agg_ui, item_agg_kg)
+        cl_loss = self.cl_coef * self.contrast_fn(user_agg_ui, user_emb)
 
         loss_dict = {
             "rec_loss": loss.item(),
             "mae_loss": mae_loss.item(),
             "cl_loss": cl_loss.item(),
         }
-        return loss + mae_loss + cl_loss, loss_dict
+        return loss + mae_loss + cl_loss, loss_dict, batch_cor
 
     def calc_topk_attn_edge(self, entity_emb, edge_index, edge_type, k):
         edge_attn_score = self.gcn.norm_attn_computer(
@@ -289,17 +311,22 @@ class KGRec(nn.Module):
         item_emb = self.all_embed[self.n_users:, :]
         return self.gcn(user_emb,
                         item_emb,
+                        self.latent_emb,
                         self.edge_index,
                         self.edge_type,
                         self.inter_edge,
                         self.inter_edge_w,
+                        self.interact_mat,
                         mess_dropout=False)[:2]
+
+    # self, user_emb, entity_emb, latent_emb, edge_index, edge_type,
+    # inter_edge, inter_edge_w, interact_mat, mess_dropout = True, item_attn = None, node_dropout = False
 
     def rating(self, u_g_embeddings, i_g_embeddings):
         return torch.matmul(u_g_embeddings, i_g_embeddings.t())
 
     # @TimeCounter.count_time(warmup_interval=4)
-    def create_bpr_loss(self, users, pos_items, neg_items):
+    def create_bpr_loss(self, users, pos_items, neg_items, cor):
         batch_size = users.shape[0]
         pos_scores = torch.sum(torch.mul(users, pos_items), axis=1)
         neg_scores = torch.sum(torch.mul(users, neg_items), axis=1)
@@ -314,8 +341,9 @@ class KGRec(nn.Module):
                        + torch.norm(pos_items) ** 2
                        + torch.norm(neg_items) ** 2) / 2
         emb_loss = self.decay * regularizer / batch_size
+        cor_loss = self.sim_decay * cor
 
-        return mf_loss + emb_loss, mf_loss, emb_loss
+        return mf_loss + emb_loss + cor_loss, mf_loss, emb_loss, cor
 
     def create_mae_loss(self, node_pair_emb, masked_edge_emb=None):
         head_embs, tail_embs = node_pair_emb[:, 0, :], node_pair_emb[:, 1, :]
@@ -352,15 +380,18 @@ class KGRec(nn.Module):
         user_emb = self.all_embed[:self.n_users, :]
         item_emb = self.all_embed[self.n_users:, :]
         edge_index, edge_type = _edge_sampling(
-        self.edge_index, self.edge_type, self.kg_drop_test_keep_rate)
+            self.edge_index, self.edge_type, self.kg_drop_test_keep_rate)
         return self.gcn(user_emb,
                         item_emb,
+                        self.latent_emb,
                         edge_index,
                         edge_type,
                         self.inter_edge,
                         self.inter_edge_w,
+                        self.interact_mat,
                         mess_dropout=False)[:2]
-    
+        # self, user_emb, entity_emb, latent_emb, edge_index, edge_type,
+        # inter_edge, inter_edge_w, interact_mat, mess_dropout = True, item_attn = None, node_dropout = False
     def generate_global_attn_score(self):
         user_emb = self.all_embed[:self.n_users, :]
         item_emb = self.all_embed[self.n_users:, :]

@@ -22,6 +22,9 @@ def parse_args_kgsr():
     parser.add_argument('--cl_coef', type=float, default=0.01, help='coefficient for CL loss')
     parser.add_argument('--cl_tau', type=float, default=1.0, help='temperature for CL')
     parser.add_argument('--cl_drop_ratio', type=float, default=0.5, help='drop ratio for CL')
+    parser.add_argument("--n_factors", type=int, default=4, help="number of latent factor for user favour")
+    parser.add_argument("--ind", type=str, default='distance', help="Independence modeling: mi, distance, cosine")
+    parser.add_argument('--sim_regularity', type=float, default=1e-4, help='regularization weight for latent factor')
 
     # ===== train ===== #
     parser.add_argument('--epoch', type=int, default=1000, help='number of epochs')

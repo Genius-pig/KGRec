@@ -7,7 +7,6 @@ import multiprocessing
 import heapq
 from time import time
 
-cores = multiprocessing.cpu_count() // 2
 
 args = parse_args()
 Ks = eval(args.Ks)
@@ -118,8 +117,6 @@ def test(model, user_dict, n_params):
     train_user_set = user_dict['train_user_set']
     test_user_set = user_dict['test_user_set']
 
-    pool = multiprocessing.Pool(cores)
-
     u_batch_size = BATCH_SIZE
     i_batch_size = BATCH_SIZE
 
@@ -165,7 +162,7 @@ def test(model, user_dict, n_params):
             rate_batch = model.rating(u_g_embeddings, i_g_embddings).detach().cpu()
 
         user_batch_rating_uid = zip(rate_batch, user_list_batch)
-        batch_result = pool.map(test_one_user, user_batch_rating_uid)
+        batch_result = [test_one_user(x) for x in user_batch_rating_uid]
         count += len(batch_result)
 
         for re in batch_result:
@@ -176,5 +173,4 @@ def test(model, user_dict, n_params):
             result['auc'] += re['auc']/n_test_users
 
     assert count == n_test_users
-    pool.close()
     return result

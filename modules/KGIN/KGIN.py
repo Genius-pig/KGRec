@@ -36,13 +36,17 @@ class Aggregator(nn.Module):
         neigh_relation_emb = entity_emb[tail] * edge_relation_emb  # [-1, channel]
         entity_agg = scatter_mean(src=neigh_relation_emb, index=head, dim_size=n_entities, dim=0)
         """cul user->latent factor attention"""
+        "equation 8"
         score_ = torch.mm(user_emb, latent_emb.t())
         score = nn.Softmax(dim=1)(score_).unsqueeze(-1)  # [n_users, n_factors, 1]
 
         """user aggregate"""
         user_agg = torch.sparse.mm(interact_mat, entity_emb)  # [n_users, channel]
+
+        "equation 1，这里我猜是为了后面计算用了expand"
         disen_weight = torch.mm(nn.Softmax(dim=-1)(disen_weight_att),
                                 weight).expand(n_users, n_factors, channel)
+        "有可能是equation 7，但是为什么要加user_agg"
         user_agg = user_agg * (disen_weight * score).sum(dim=1) + user_agg  # [n_users, channel]
 
         return entity_agg, user_agg

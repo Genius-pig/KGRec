@@ -117,16 +117,17 @@ if __name__ == '__main__':
             model.train()
             add_loss_dict, s = defaultdict(float), 0
             train_s_t = time()
+            cor_loss = 0
             with tqdm(total=len(train_cf)//args.batch_size) as pbar:
                 while s + args.batch_size <= len(train_cf):
                     batch = get_feed_dict(train_cf_with_neg,
                                         s, s + args.batch_size)
-                    batch_loss, batch_loss_dict = model(batch)
+                    batch_loss, batch_loss_dict, batch_cor = model(batch)
 
                     optimizer.zero_grad(set_to_none=True)
                     batch_loss.backward()
                     optimizer.step()
-
+                    cor_loss += batch_cor
                     for k, v in batch_loss_dict.items():
                         add_loss_dict[k] += v
                     s += args.batch_size

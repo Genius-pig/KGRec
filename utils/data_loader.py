@@ -1,12 +1,11 @@
-import numpy as np
-from tqdm import tqdm
-import networkx as nx
-import scipy.sparse as sp
-
-import random
-from time import time
-from collections import defaultdict
 import warnings
+from collections import defaultdict
+
+import networkx as nx
+import numpy as np
+import scipy.sparse as sp
+from tqdm import tqdm
+
 warnings.filterwarnings('ignore')
 
 n_users = 0
@@ -168,5 +167,4 @@ def load_data(model_args):
     }
 
     return train_cf, test_cf, user_dict, n_params, graph, \
-           [adj_mat_list, norm_mat_list, mean_mat_list]
-
+        [adj_mat_list, norm_mat_list, mean_mat_list]
