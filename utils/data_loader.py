@@ -7,6 +7,7 @@ import random
 from time import time
 from collections import defaultdict
 import warnings
+
 warnings.filterwarnings('ignore')
 
 n_users = 0
@@ -168,5 +169,29 @@ def load_data(model_args):
     }
 
     return train_cf, test_cf, user_dict, n_params, graph, \
-           [adj_mat_list, norm_mat_list, mean_mat_list]
+        [adj_mat_list, norm_mat_list, mean_mat_list]
+
+
+def load_data_kgan(model_args):
+    global args
+    args = model_args
+    directory = args.data_path + args.dataset + '/'
+    print('reading train and test user-item set ...')
+    train_cf = read_cf(directory + 'train.txt')
+    test_cf = read_cf(directory + 'test.txt')
+    print('interaction count: train %d, test %d' % (train_cf.shape[0], test_cf.shape[0]))
+    remap_item(train_cf, test_cf)
+
+    print('combinating train_cf and kg data ...')
+    triplets = read_triplets(directory + 'kg_final.txt')
+
+    relation_set = set(triplets[:, 1])
+
+    user_dict = {
+        'train_user_set': train_user_set,
+        'test_user_set': test_user_set
+    }
+
+    return train_cf, test_cf, relation_set, triplets, user_dict
+
 
