@@ -185,6 +185,14 @@ def load_data_kgan(model_args):
     print('combinating train_cf and kg data ...')
     triplets = read_triplets(directory + 'kg_final.txt')
 
+    kgs = {}
+
+    for triplet in triplets:
+        if triplet[0] not in kgs:
+            kgs.update({triplet[0]: [triplet[1:]]})
+        else:
+            kgs[triplet[0]].append(triplet[1:])
+
     relation_set = set(triplets[:, 1])
 
     user_dict = {
@@ -192,6 +200,14 @@ def load_data_kgan(model_args):
         'test_user_set': test_user_set
     }
 
-    return train_cf, test_cf, relation_set, triplets, user_dict
+    n_params = {
+        'n_users': int(n_users),
+        'n_items': int(n_items),
+        'n_entities': int(n_entities),
+        'n_nodes': int(n_nodes),
+        'n_relations': int(n_relations)
+    }
+
+    return train_cf, test_cf, relation_set, kgs, user_dict, n_params
 
 
