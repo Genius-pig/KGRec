@@ -1,12 +1,14 @@
 import collections
 import os
+from time import time
 from logging import getLogger
-from random import random
+import random
 
 import numpy as np
 import torch
 from tqdm import tqdm
 
+from modules.KGAN.KGAN import KGAN
 from utils.data_loader import load_data_kgan
 from utils.helper import init_logger
 from utils.parser import parse_args_kgan as parse_args
@@ -61,8 +63,11 @@ def get_aggregate_set(aggregate_args, kg, user_history_dict, relation_set, n_ent
 
 def get_feed_dict(args, data, aggregate_set, relation_set, start, end):
     feed_dict = dict()
-    feed_dict["items"] = data[start:end, 1]
     # feed_dict["labels"] = data[start:end, 2]
+    feed_dict["items"] = torch.LongTensor(data[start:end, 1]).to(device)
+    memories_h = []
+    memories_r = []
+    memories_t = []
 
     for i in range(args.context_hops):
         m_h = []
@@ -80,11 +85,13 @@ def get_feed_dict(args, data, aggregate_set, relation_set, start, end):
             m_h.append(h)
             m_r.append(r)
             m_t.append(t)
+        memories_h.append(torch.LongTensor(m_h).to(device))
+        memories_r.append(torch.LongTensor(m_r).to(device))
+        memories_t.append(torch.LongTensor(m_t).to(device))
 
-        feed_dict["memories_h"] = m_h
-        feed_dict["memories_r"] = m_r
-        feed_dict["memories_t"] = m_t
-
+    feed_dict["memories_h"] = memories_h
+    feed_dict["memories_r"] = memories_r
+    feed_dict["memories_t"] = memories_t
     return feed_dict
 
 
@@ -111,5 +118,24 @@ if __name__ == '__main__':
     logger.info(f"DESC: {args.desc}\n")
 
     train_cf, test_cf, relation_set, triplets, user_dict, n_params = load_data_kgan(args)
+
+    """define model"""
+    model = KGAN(n_params, args).to(device)
+
+    """define optimizer"""
+    # optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
+
     aggregate_set = get_aggregate_set(args, triplets, user_dict['train_user_set'], relation_set, n_params['n_entities'])
-    get_feed_dict(args, train_cf, aggregate_set, relation_set, 0, 1024)
+
+    index = np.arange(len(train_cf))
+    np.random.shuffle(index)
+    train_cf_shuffle = train_cf[index]
+
+    get_feed_dict(args, train_cf_shuffle, aggregate_set, relation_set, 0, 20)
+
+    cur_best_pre_0 = 0
+    ndcg = 0
+    stopping_step = 0
+    should_stop = False
+
+    logger.info("start training ...")
