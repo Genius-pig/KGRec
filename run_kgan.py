@@ -123,15 +123,9 @@ if __name__ == '__main__':
     model = KGAN(n_params, args).to(device)
 
     """define optimizer"""
-    # optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
+    optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
 
     aggregate_set = get_aggregate_set(args, triplets, user_dict['train_user_set'], relation_set, n_params['n_entities'])
-
-    index = np.arange(len(train_cf))
-    np.random.shuffle(index)
-    train_cf_shuffle = train_cf[index]
-
-    get_feed_dict(args, train_cf_shuffle, aggregate_set, relation_set, 0, 20)
 
     cur_best_pre_0 = 0
     ndcg = 0
@@ -139,3 +133,28 @@ if __name__ == '__main__':
     should_stop = False
 
     logger.info("start training ...")
+
+    for epoch in range(args.epoch):
+        """training CF"""
+        # shuffle training data
+        index = np.arange(len(train_cf))
+        np.random.shuffle(index)
+        train_cf_shuffle = train_cf[index]
+        """training"""
+        loss, s, cor_loss = 0, 0, 0
+        train_s_t = time()
+        with tqdm(total=len(train_cf) // args.batch_size) as pbar:
+            while s + args.batch_size <= len(train_cf):
+                batch = get_feed_dict(args, train_cf_shuffle, aggregate_set, relation_set, s, s + args.batch_size)
+                batch_loss, _, _, batch_cor = model(batch)
+                batch_loss = batch_loss
+                optimizer.zero_grad()
+                batch_loss.backward()
+                optimizer.step()
+
+                loss += batch_loss
+                cor_loss += batch_cor
+                s += args.batch_size
+                pbar.update(1)
+
+        train_e_t = time()
