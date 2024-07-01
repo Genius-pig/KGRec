@@ -59,9 +59,12 @@ class KGAN(nn.Module):
             Rh = torch.reshape(Rh, shape=[-1, self.n_relations, self.n_memory, self.embedding_size])
             v = torch.expand_dims(self.item_embeddings, axis=1)
             v = torch.expand_dims(v, axis=-1)
-            probs = torch.squeeze(torch.matmul(Rh, v), axis=3)
+            probs = torch.squeeze(torch.matmul(Rh, v), 3)
             probs = torch.reshape(probs, shape=[-1, self.n_memory])
             probs_normalized = torch.softmax(probs, dim=-1)
+            probs_expanded = torch.expand_dims(probs_normalized, axis=2)
+            o = torch.reduce_sum(self.t_emb_list[hop] * probs_expanded, axis=1)
+            o = torch.reshape(o, shape=[-1, self.n_relations, self.embedding_size])
 
         return o_list
 
