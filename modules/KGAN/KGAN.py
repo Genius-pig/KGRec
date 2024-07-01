@@ -36,8 +36,34 @@ class KGAN(nn.Module):
 
         self.h_transfer_list = []
         self.t_transfer_list = []
+
     def forward(self, batch=None):
-        print("hello")
+        items = batch['items']
+        memories_h = batch['memories_h']
+        memories_r = batch['memories_r']
+        memories_t = batch['memories_t']
+        items_emb = self.entity_emb_matrix[items]
+        for i in range(self.context_hops):
+            memories_h = torch.reshape(memories_h, [-1, self.n_memory])
+            memories_r = torch.reshape(memories_r, [-1, self.n_memory])
+            memories_t = torch.reshape(memories_t, [-1, self.n_memory])
+            self.h_emb_list.append(self.entity_emb_matrix[memories_h])
+            self.r_emb_list.append(self.relation_emb_matrix[memories_r])
+            self.t_emb_list.append(self.entity_emb_matrix[memories_t])
+
+    def intra_inter_group_attention(self):
+        o_list = []
+        for hop in range(self.n_hop):
+            h_expanded = torch.expand_dims(self.h_emb_list[hop], axis=3)
+            Rh = torch.squeeze(torch.matmul(self.r_emb_list[hop], h_expanded), 3)
+            Rh = torch.reshape(Rh, shape=[-1, self.n_relations, self.n_memory, self.embedding_size])
+            v = torch.expand_dims(self.item_embeddings, axis=1)
+            v = torch.expand_dims(v, axis=-1)
+            probs = torch.squeeze(torch.matmul(Rh, v), axis=3)
+            probs = torch.reshape(probs, shape=[-1, self.n_memory])
+            probs_normalized = torch.softmax(probs, dim=-1)
+
+        return o_list
 
     def build_embeddings(self):
         initializer = nn.init.xavier_uniform_
