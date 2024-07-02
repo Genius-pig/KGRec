@@ -37,8 +37,18 @@ class KGAN(nn.Module):
         self.h_transfer_list = []
         self.t_transfer_list = []
 
+        self.attention_layer = nn.ModuleList([
+            nn.Sequential(
+                nn.Linear(self.dim, self.dim, bias=False),
+                nn.Dropout(0.5),
+                nn.Linear(self.dim, 1, bias=False),
+                nn.ReLU()
+            ) for _ in range(self.context_hops)
+        ])
+
     def forward(self, batch=None):
         items = batch['items']
+        labels = batch['labels']
         memories_h = batch['memories_h']
         memories_r = batch['memories_r']
         memories_t = batch['memories_t']
@@ -50,14 +60,17 @@ class KGAN(nn.Module):
             self.h_emb_list.append(self.entity_emb_matrix[memories_h])
             self.r_emb_list.append(self.relation_emb_matrix[memories_r])
             self.t_emb_list.append(self.entity_emb_matrix[memories_t])
+        o_list = self.intra_inter_group_attention(items_emb)
+        scores = self.rating(items_emb, o_list)
+        return self.build_loss(scores)
 
-    def intra_inter_group_attention(self):
+    def intra_inter_group_attention(self, items_emb):
         o_list = []
-        for hop in range(self.n_hop):
+        for hop in range(self.context_hops):
             h_expanded = torch.expand_dims(self.h_emb_list[hop], axis=3)
             Rh = torch.squeeze(torch.matmul(self.r_emb_list[hop], h_expanded), 3)
             Rh = torch.reshape(Rh, shape=[-1, self.n_relations, self.n_memory, self.embedding_size])
-            v = torch.expand_dims(self.item_embeddings, axis=1)
+            v = torch.expand_dims(items_emb, axis=1)
             v = torch.expand_dims(v, axis=-1)
             probs = torch.squeeze(torch.matmul(Rh, v), 3)
             probs = torch.reshape(probs, shape=[-1, self.n_memory])
@@ -65,15 +78,65 @@ class KGAN(nn.Module):
             probs_expanded = torch.expand_dims(probs_normalized, axis=2)
             o = torch.reduce_sum(self.t_emb_list[hop] * probs_expanded, axis=1)
             o = torch.reshape(o, shape=[-1, self.n_relations, self.embedding_size])
+            attention = self.attention_layer[hop](o)
+
+            attention = torch.squeeze(attention, 2)
+
+            attention_weight_norm = torch.softmax(attention, dim=-1)
+
+            attention_weight_expand = torch.expand_dims(attention_weight_norm, axis=-1)
+
+            o = torch.reduce_sum(o * attention_weight_expand, axis=1)
+
+            items_emb = self.update_item_embedding(items_emb, o)
+            o_list.append(o)
 
         return o_list
 
+    def update_item_embedding(self, item_embeddings, o):
+
+        item_embeddings = torch.matmul(item_embeddings + o, self.transform_matrix)
+
+        return item_embeddings
+
+    def rating(self, item_embeddings, o_list):
+        y = o_list[-1]
+        if self.using_all_hops:
+            for i in range(self.n_hop - 1):
+                y += o_list[i]
+
+        # [batch_size]
+        scores = torch.reduce_sum(item_embeddings * y, axis=1)
+        return scores
+
     def build_embeddings(self):
         initializer = nn.init.xavier_uniform_
-        self.entity_emb_matrix = initializer(torch.empty(self.n_entities, self.emb_size))
-        self.last_entity_init = initializer(torch.empty(1, self.emb_size))
-        self.relation_emb_matrix = initializer(torch.empty(self.n_relations, self.emb_size))
-        self.ent_transfer = initializer(torch.empty(self.n_entities, self.emb_size))
-        self.rel_transfer = initializer(torch.empty(self.n_relations, self.emb_size))
-        self.transform_matrix = initializer(torch.empty(self.emb_size, self.emb_size))
-        self.oR_matrix = initializer(torch.empty(self.emb_size, self.emb_size))
+        self.entity_emb_matrix = initializer(torch.empty(self.n_entities, self.dim))
+        self.last_entity_init = initializer(torch.empty(1, self.dim))
+        self.relation_emb_matrix = initializer(torch.empty(self.n_relations, self.dim))
+        self.ent_transfer = initializer(torch.empty(self.n_entities, self.dim))
+        self.rel_transfer = initializer(torch.empty(self.n_relations, self.dim))
+        self.transform_matrix = initializer(torch.empty(self.dim, self.dim))
+        self.oR_matrix = initializer(torch.empty(self.dim, self.dim))
+
+    def build_loss(self, scores):
+        base_loss = torch.reduce_mean(torch.sigmoid_cross_entropy_with_logits(labels=self.labels, logits=scores))
+
+        kge_loss = 0
+        for hop in range(self.context_hops):
+            h_expanded = torch.expand_dims(self.h_emb_list[hop], axis=2)
+            t_expanded = torch.expand_dims(self.t_emb_list[hop], axis=3)
+            hRt = torch.squeeze(torch.matmul(torch.matmul(h_expanded, self.r_emb_list[hop]), t_expanded))
+            self.kge_loss += torch.reduce_mean(torch.sigmoid(hRt))
+        kge_loss = -self.kge_weight * kge_loss
+
+        l2_loss = 0
+        for hop in range(self.n_hop):
+            l2_loss += torch.reduce_mean(torch.reduce_sum(self.h_emb_list[hop] * self.h_emb_list[hop]))
+            l2_loss += torch.reduce_mean(torch.reduce_sum(self.t_emb_list[hop] * self.t_emb_list[hop]))
+            l2_loss += torch.reduce_mean(torch.reduce_sum(self.r_emb_list[hop] * self.r_emb_list[hop]))
+            l2_loss += torch.l2_loss(self.transform_matrix)
+        l2_loss = self.l2_weight * l2_loss
+
+        loss = base_loss + kge_loss + l2_loss
+        return loss

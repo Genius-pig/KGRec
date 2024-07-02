@@ -308,8 +308,8 @@ class Recommender(nn.Module):
 
     def create_bpr_loss(self, users, pos_items, neg_items, cor):
         batch_size = users.shape[0]
-        pos_scores = torch.sum(torch.mul(users, pos_items), axis=1)
-        neg_scores = torch.sum(torch.mul(users, neg_items), axis=1)
+        pos_scores = torch.sum(torch.mul(users, pos_items), 1)
+        neg_scores = torch.sum(torch.mul(users, neg_items), 1)
 
         mf_loss = -1 * torch.mean(nn.LogSigmoid()(pos_scores - neg_scores))
 
