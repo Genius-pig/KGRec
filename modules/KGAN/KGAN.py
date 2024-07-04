@@ -140,5 +140,5 @@ class KGAN(nn.Module):
             l2_loss += torch.l2_loss(self.transform_matrix)
         l2_loss = self.l2_weight * l2_loss
 
-        loss = base_loss + kge_loss + l2_loss
+        loss = mf_loss + kge_loss + l2_loss
         return loss
