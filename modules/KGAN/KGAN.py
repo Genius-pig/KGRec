@@ -47,12 +47,13 @@ class KGAN(nn.Module):
         ])
 
     def forward(self, batch=None):
-        items = batch['items']
-        labels = batch['labels']
+        pos_items = batch['pos_items']
+        neg_items = batch['neg_items']
         memories_h = batch['memories_h']
         memories_r = batch['memories_r']
         memories_t = batch['memories_t']
-        items_emb = self.entity_emb_matrix[items]
+        items_emb = self.entity_emb_matrix[pos_items]
+        neg_items_emb = self.entity_emb_matrix[neg_items]
         for i in range(self.context_hops):
             memories_h = torch.reshape(memories_h, [-1, self.n_memory])
             memories_r = torch.reshape(memories_r, [-1, self.n_memory])
@@ -62,7 +63,8 @@ class KGAN(nn.Module):
             self.t_emb_list.append(self.entity_emb_matrix[memories_t])
         o_list = self.intra_inter_group_attention(items_emb)
         scores = self.rating(items_emb, o_list)
-        return self.build_loss(scores)
+        _scores = self.rating(neg_items_emb, o_list)
+        return self.build_loss(scores, _scores)
 
     def intra_inter_group_attention(self, items_emb):
         o_list = []
@@ -119,8 +121,8 @@ class KGAN(nn.Module):
         self.transform_matrix = initializer(torch.empty(self.dim, self.dim))
         self.oR_matrix = initializer(torch.empty(self.dim, self.dim))
 
-    def build_loss(self, scores):
-        base_loss = torch.reduce_mean(torch.sigmoid_cross_entropy_with_logits(labels=self.labels, logits=scores))
+    def build_loss(self, pos_scores, neg_scores):
+        mf_loss = -1 * torch.mean(nn.LogSigmoid()(pos_scores - neg_scores))
 
         kge_loss = 0
         for hop in range(self.context_hops):

@@ -61,10 +61,23 @@ def get_aggregate_set(aggregate_args, kg, user_history_dict, relation_set, n_ent
     return aggregate_set
 
 
-def get_feed_dict(args, data, aggregate_set, relation_set, start, end):
+def get_feed_dict(args, data, aggregate_set, relation_set, start, end, n_items, train_user_set):
     feed_dict = dict()
     # feed_dict["labels"] = data[start:end, 2]
-    feed_dict["items"] = torch.LongTensor(data[start:end, 1]).to(device)
+    feed_dict["pos_items"] = torch.LongTensor(data[start:end, 1]).to(device)
+
+    def negative_sampling(user_item, train_user_set):
+        neg_items = []
+        for user, _ in user_item.cpu().numpy():
+            user = int(user)
+            while True:
+                neg_item = np.random.randint(low=0, high=n_items, size=1)[0]
+                if neg_item not in train_user_set[user]:
+                    break
+            neg_items.append(neg_item)
+        return neg_items
+    feed_dict['neg_items'] = torch.LongTensor(negative_sampling(data,
+                                                                train_user_set)).to(device)
     memories_h = []
     memories_r = []
     memories_t = []
@@ -145,15 +158,15 @@ if __name__ == '__main__':
         train_s_t = time()
         with tqdm(total=len(train_cf) // args.batch_size) as pbar:
             while s + args.batch_size <= len(train_cf):
-                batch = get_feed_dict(args, train_cf_shuffle, aggregate_set, relation_set, s, s + args.batch_size)
-                batch_loss, _, _, batch_cor = model(batch)
+                batch = get_feed_dict(args, train_cf_shuffle, aggregate_set, relation_set, s, s + args.batch_size,
+                                      n_params['n_items'], user_dict)
+                loss = model(batch)
                 batch_loss = batch_loss
                 optimizer.zero_grad()
                 batch_loss.backward()
                 optimizer.step()
 
                 loss += batch_loss
-                cor_loss += batch_cor
                 s += args.batch_size
                 pbar.update(1)
 
