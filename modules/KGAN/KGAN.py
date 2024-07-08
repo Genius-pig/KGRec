@@ -18,8 +18,8 @@ class KGAN(nn.Module):
         self.n_memory = args_config.n_memory
         self.build_embeddings()
         self.entity_emb_matrix = nn.Parameter(self.entity_emb_matrix)
-        self.last_entity_init = nn.Parameter(self.last_entity_init)
-        self.entity_emb_matrix = torch.cat([self.entity_emb_matrix, self.last_entity_init], 0)
+        # self.last_entity_init = nn.Parameter(self.last_entity_init)
+        # self.entity_emb_matrix = torch.cat([self.entity_emb_matrix, self.last_entity_init], 0)
         self.relation_emb_matrix = nn.Parameter(self.relation_emb_matrix)
         self.ent_transfer = nn.Parameter(self.ent_transfer)
         self.ent_transfer = torch.concat([self.ent_transfer, self.last_entity_init], 0)
