@@ -16,16 +16,16 @@ class KGAN(nn.Module):
         self.n_hop = args_config.context_hops
         self.lr = args_config.lr
         self.n_memory = args_config.n_memory
-        self.build_embeddings()
-        self.entity_emb_matrix = nn.Parameter(self.entity_emb_matrix)
+        # self.build_embeddings()
+        self.entity_emb_matrix = nn.Embedding(self.n_entities + 1, self.dim)
         # self.last_entity_init = nn.Parameter(self.last_entity_init)
         # self.entity_emb_matrix = torch.cat([self.entity_emb_matrix, self.last_entity_init], 0)
-        self.relation_emb_matrix = nn.Parameter(self.relation_emb_matrix)
-        self.ent_transfer = nn.Parameter(self.ent_transfer)
-        self.ent_transfer = torch.concat([self.ent_transfer, self.last_entity_init], 0)
-        self.rel_transfer = nn.Parameter(self.rel_transfer)
-        self.transform_matrix = nn.Parameter(self.transform_matrix)
-        self.oR_matrix = nn.Parameter(self.oR_matrix)
+        self.relation_emb_matrix = nn.Embedding(self.n_relations, self.dim)
+        self.ent_transfer = nn.Embedding(self.n_entities + 1, self.dim)
+        # self.ent_transfer = torch.concat([self.ent_transfer, self.last_entity_init], 0)
+        self.rel_transfer = nn.Embedding(self.n_relations, self.dim)
+        self.transform_matrix = nn.Parameter(torch.empty(self.dim, self.dim))
+        self.oR_matrix = nn.Parameter(torch.empty(self.dim, self.dim))
         self.h_emb_list = []
         self.r_emb_list = []
         self.t_emb_list = []
@@ -111,15 +111,14 @@ class KGAN(nn.Module):
         scores = torch.reduce_sum(item_embeddings * y, axis=1)
         return scores
 
-    def build_embeddings(self):
+    def init_weight(self):
         initializer = nn.init.xavier_uniform_
-        self.entity_emb_matrix = initializer(torch.empty(self.n_entities, self.dim))
-        self.last_entity_init = initializer(torch.empty(1, self.dim))
-        self.relation_emb_matrix = initializer(torch.empty(self.n_relations, self.dim))
-        self.ent_transfer = initializer(torch.empty(self.n_entities, self.dim))
-        self.rel_transfer = initializer(torch.empty(self.n_relations, self.dim))
-        self.transform_matrix = initializer(torch.empty(self.dim, self.dim))
-        self.oR_matrix = initializer(torch.empty(self.dim, self.dim))
+        initializer(self.entity_emb_matrix.weight)
+        initializer(self.relation_emb_matrix.weight)
+        initializer(self.ent_transfer.weight)
+        initializer(self.rel_transfer.weight)
+        initializer(self.transform_matrix)
+        initializer(self.oR_matrix)
 
     def build_loss(self, pos_scores, neg_scores):
         mf_loss = -1 * torch.mean(nn.LogSigmoid()(pos_scores - neg_scores))
