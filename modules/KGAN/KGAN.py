@@ -69,17 +69,23 @@ class KGAN(nn.Module):
     def intra_inter_group_attention(self, items_emb):
         o_list = []
         for hop in range(self.n_hops):
+            # [batch * relation, memory, dim, 1]
             h_expanded = torch.unsqueeze(self.h_emb_list[hop], 3)
+
+            # [batch * relation, memory, 1, dim]
+
+            # [batch * relation, memory, dim]
             Rh = torch.squeeze(torch.matmul(self.r_emb_list[hop], h_expanded), 3)
-            Rh = torch.reshape(Rh, shape=[-1, self.n_relations, self.n_memory, self.embedding_size])
-            v = torch.expand_dims(items_emb, axis=1)
-            v = torch.expand_dims(v, axis=-1)
+            # [batch, relation, memory, dim]
+            Rh = torch.reshape(Rh, shape=[-1, self.n_relations - 1, self.n_memory, self.dim])
+            v = torch.unsqueeze(items_emb, 1)
+            v = torch.unsqueeze(v, -1)
             probs = torch.squeeze(torch.matmul(Rh, v), 3)
             probs = torch.reshape(probs, shape=[-1, self.n_memory])
             probs_normalized = torch.softmax(probs, dim=-1)
-            probs_expanded = torch.expand_dims(probs_normalized, axis=2)
-            o = torch.reduce_sum(self.t_emb_list[hop] * probs_expanded, axis=1)
-            o = torch.reshape(o, shape=[-1, self.n_relations, self.embedding_size])
+            probs_expanded = torch.unsqueeze(probs_normalized, 2)
+            o = torch.sum(self.t_emb_list[hop] * probs_expanded, 1)
+            o = torch.reshape(o, shape=[-1, self.n_relations - 1, self.dim])
             attention = self.attention_layer[hop](o)
 
             attention = torch.squeeze(attention, 2)

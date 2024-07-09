@@ -164,7 +164,7 @@ def parse_args_kgan():
     parser.add_argument('--l2', type=float, default=1e-5, help='l2 regularization weight')
     parser.add_argument('--lr', type=float, default=1e-4, help='learning rate')
     parser.add_argument('--sim_regularity', type=float, default=1e-4, help='regularization weight for latent factor')
-    parser.add_argument("--inverse_r", type=bool, default=True, help="consider inverse relation or not")
+    parser.add_argument("--inverse_r", type=bool, default=False, help="consider inverse relation or not")
     parser.add_argument("--node_dropout", type=bool, default=True, help="consider node dropout or not")
     parser.add_argument("--node_dropout_rate", type=float, default=0.5, help="ratio of node dropout")
     parser.add_argument("--mess_dropout", type=bool, default=True, help="consider message dropout or not")

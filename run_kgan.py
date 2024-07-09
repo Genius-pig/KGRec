@@ -20,6 +20,7 @@ def get_aggregate_set(aggregate_args, kg, user_history_dict, relation_set, n_ent
     for user in tqdm(user_history_dict, ascii=True):
         for hop in range(aggregate_args.context_hops):
 
+            ### 第一个hop
             if hop == 0:
                 tails_of_last_hop = user_history_dict[user]
             else:
@@ -38,11 +39,12 @@ def get_aggregate_set(aggregate_args, kg, user_history_dict, relation_set, n_ent
                 for entity in tails_of_last_hop:
                     if entity == n_entity:
                         continue
-                    for tail_and_relation in kg[entity]:
-                        if tail_and_relation[0] == relation:
-                            h.append(entity)
-                            r.append(tail_and_relation[0])
-                            t.append(tail_and_relation[1])
+                    if entity in kg:
+                        for tail_and_relation in kg[entity]:
+                            if tail_and_relation[0] == relation:
+                                h.append(entity)
+                                r.append(tail_and_relation[0])
+                                t.append(tail_and_relation[1])
                 if len(r) == 0:
                     _aggregation_R.append([[n_entity], [relation], [n_entity]])
                 else:
@@ -76,6 +78,7 @@ def get_feed_dict(args, data, aggregate_set, relation_set, start, end, n_items, 
                     break
             neg_items.append(neg_item)
         return neg_items
+
     feed_dict['neg_items'] = torch.LongTensor(negative_sampling(data,
                                                                 train_user_set)).to(device)
     memories_h = []
