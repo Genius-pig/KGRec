@@ -68,7 +68,7 @@ def get_feed_dict(args, data, aggregate_set, relation_set, start, end, n_items, 
 
     def negative_sampling(user_item, train_user_set):
         neg_items = []
-        for user, _ in user_item.cpu().numpy():
+        for user, _ in user_item:
             user = int(user)
             while True:
                 neg_item = np.random.randint(low=0, high=n_items, size=1)[0]
@@ -159,7 +159,7 @@ if __name__ == '__main__':
         with tqdm(total=len(train_cf) // args.batch_size) as pbar:
             while s + args.batch_size <= len(train_cf):
                 batch = get_feed_dict(args, train_cf_shuffle, aggregate_set, relation_set, s, s + args.batch_size,
-                                      n_params['n_items'], user_dict)
+                                      n_params['n_items'], user_dict['train_user_set'])
                 loss = model(batch)
                 batch_loss = batch_loss
                 optimizer.zero_grad()

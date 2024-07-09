@@ -52,15 +52,15 @@ class KGAN(nn.Module):
         memories_h = batch['memories_h']
         memories_r = batch['memories_r']
         memories_t = batch['memories_t']
-        items_emb = self.entity_emb_matrix[pos_items]
-        neg_items_emb = self.entity_emb_matrix[neg_items]
+        items_emb = self.entity_emb_matrix(pos_items)
+        neg_items_emb = self.entity_emb_matrix(neg_items)
         for i in range(self.n_hops):
-            memories_h = torch.reshape(memories_h, [-1, self.n_memory])
-            memories_r = torch.reshape(memories_r, [-1, self.n_memory])
-            memories_t = torch.reshape(memories_t, [-1, self.n_memory])
-            self.h_emb_list.append(self.entity_emb_matrix[memories_h])
-            self.r_emb_list.append(self.relation_emb_matrix[memories_r])
-            self.t_emb_list.append(self.entity_emb_matrix[memories_t])
+            memories_h = torch.reshape(memories_h[i], [-1, self.n_memory])
+            memories_r = torch.reshape(memories_r[i], [-1, self.n_memory])
+            memories_t = torch.reshape(memories_t[i], [-1, self.n_memory])
+            self.h_emb_list.append(self.entity_emb_matrix(memories_h))
+            self.r_emb_list.append(self.relation_emb_matrix(memories_r))
+            self.t_emb_list.append(self.entity_emb_matrix(memories_t))
         o_list = self.intra_inter_group_attention(items_emb)
         scores = self.rating(items_emb, o_list)
         _scores = self.rating(neg_items_emb, o_list)
@@ -69,7 +69,7 @@ class KGAN(nn.Module):
     def intra_inter_group_attention(self, items_emb):
         o_list = []
         for hop in range(self.n_hops):
-            h_expanded = torch.expand_dims(self.h_emb_list[hop], axis=3)
+            h_expanded = torch.unsqueeze(self.h_emb_list[hop], 3)
             Rh = torch.squeeze(torch.matmul(self.r_emb_list[hop], h_expanded), 3)
             Rh = torch.reshape(Rh, shape=[-1, self.n_relations, self.n_memory, self.embedding_size])
             v = torch.expand_dims(items_emb, axis=1)
