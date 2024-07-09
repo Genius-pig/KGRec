@@ -13,7 +13,7 @@ class KGAN(nn.Module):
         self.n_nodes = data_config['n_nodes']
 
         self.dim = args_config.dim
-        self.n_hop = args_config.context_hops
+        self.n_hops = args_config.context_hops
         self.lr = args_config.lr
         self.n_memory = args_config.n_memory
         # self.build_embeddings()
@@ -43,7 +43,7 @@ class KGAN(nn.Module):
                 nn.Dropout(0.5),
                 nn.Linear(self.dim, 1, bias=False),
                 nn.ReLU()
-            ) for _ in range(self.context_hops)
+            ) for _ in range(self.n_hops)
         ])
 
     def forward(self, batch=None):
@@ -54,7 +54,7 @@ class KGAN(nn.Module):
         memories_t = batch['memories_t']
         items_emb = self.entity_emb_matrix[pos_items]
         neg_items_emb = self.entity_emb_matrix[neg_items]
-        for i in range(self.context_hops):
+        for i in range(self.n_hops):
             memories_h = torch.reshape(memories_h, [-1, self.n_memory])
             memories_r = torch.reshape(memories_r, [-1, self.n_memory])
             memories_t = torch.reshape(memories_t, [-1, self.n_memory])
@@ -68,7 +68,7 @@ class KGAN(nn.Module):
 
     def intra_inter_group_attention(self, items_emb):
         o_list = []
-        for hop in range(self.context_hops):
+        for hop in range(self.n_hops):
             h_expanded = torch.expand_dims(self.h_emb_list[hop], axis=3)
             Rh = torch.squeeze(torch.matmul(self.r_emb_list[hop], h_expanded), 3)
             Rh = torch.reshape(Rh, shape=[-1, self.n_relations, self.n_memory, self.embedding_size])
@@ -124,7 +124,7 @@ class KGAN(nn.Module):
         mf_loss = -1 * torch.mean(nn.LogSigmoid()(pos_scores - neg_scores))
 
         kge_loss = 0
-        for hop in range(self.context_hops):
+        for hop in range(self.n_hops):
             h_expanded = torch.expand_dims(self.h_emb_list[hop], axis=2)
             t_expanded = torch.expand_dims(self.t_emb_list[hop], axis=3)
             hRt = torch.squeeze(torch.matmul(torch.matmul(h_expanded, self.r_emb_list[hop]), t_expanded))
