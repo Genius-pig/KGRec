@@ -65,12 +65,13 @@ class KGAN(nn.Module):
             self.h_emb_list.append(self.entity_emb_matrix(memories_h_temp))
             self.r_emb_list.append(self.relation_emb_matrix(memories_r_temp))
             self.t_emb_list.append(self.entity_emb_matrix(memories_t_temp))
-        o_list = self.intra_inter_group_attention(items_emb)
-        scores = self.rating(items_emb, o_list)
+        o_list, items_emb_n = self.intra_inter_group_attention(items_emb)
+        scores = self.rating(items_emb_n, o_list)
         _scores = self.rating(neg_items_emb, o_list)
         return self.build_loss(scores, _scores)
 
     def intra_inter_group_attention(self, items_emb):
+        global items_emb_new
         o_list = []
         for hop in range(self.n_hops):
             # [batch * relation, memory, dim, 1]
@@ -109,10 +110,10 @@ class KGAN(nn.Module):
 
             o = torch.sum(o * attention_weight_expand, 1)
 
-            items_emb = self.update_item_embedding(items_emb, o)
+            items_emb_new = self.update_item_embedding(items_emb, o)
             o_list.append(o)
 
-        return o_list
+        return o_list, items_emb_new
 
     def update_item_embedding(self, item_embeddings, o):
 
