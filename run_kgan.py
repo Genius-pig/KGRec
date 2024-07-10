@@ -164,7 +164,6 @@ if __name__ == '__main__':
                 batch = get_feed_dict(args, train_cf_shuffle, aggregate_set, relation_set, s, s + args.batch_size,
                                       n_params['n_items'], user_dict['train_user_set'])
                 batch_loss = model(batch)
-                batch_loss = batch_loss
                 optimizer.zero_grad()
                 batch_loss.backward(retain_graph=True)
                 optimizer.step()
