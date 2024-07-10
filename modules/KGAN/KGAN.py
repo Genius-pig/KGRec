@@ -73,13 +73,12 @@ class KGAN(nn.Module):
             h_expanded = torch.unsqueeze(self.h_emb_list[hop], 3)
 
             # [batch * relation, memory, 1, dim]
+            r_expanded = torch.unsqueeze(self.r_emb_list[hop], 2)
+            # [batch * relation, memory, dim, dim]
+            Rh = torch.matmul(h_expanded, r_expanded).view(-1, self.n_relations-1, self.n_memory, self.dim, self.dim)
 
-            # [batch * relation, memory, dim]
-            Rh = torch.squeeze(torch.matmul(self.r_emb_list[hop], h_expanded), 3)
-            # [batch, relation, memory, dim]
-            Rh = torch.reshape(Rh, shape=[-1, self.n_relations - 1, self.n_memory, self.dim])
-            v = torch.unsqueeze(items_emb, 1)
-            v = torch.unsqueeze(v, -1)
+            # [batch, 1, 1, dim, 1]
+            v = items_emb.view(-1, 1, 1, self.dim, 1)
             probs = torch.squeeze(torch.matmul(Rh, v), 3)
             probs = torch.reshape(probs, shape=[-1, self.n_memory])
             probs_normalized = torch.softmax(probs, dim=-1)
