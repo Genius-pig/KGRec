@@ -124,7 +124,7 @@ class KGAN(nn.Module):
     def rating(self, item_embeddings, o_list):
         y = o_list[-1]
         for i in range(self.n_hops - 1):
-            y += o_list[i]
+            y = y + o_list[i]
 
         # [batch_size]
         scores = torch.sum(item_embeddings * y, 1)
