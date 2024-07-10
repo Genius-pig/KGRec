@@ -184,5 +184,6 @@ def parse_args_kgan():
     # ===== save model ===== #
     parser.add_argument("--save", type=bool, default=False, help="save model or not")
     parser.add_argument("--out_dir", type=str, default="./weights/", help="output directory for model")
+    parser.add_argument('--kge_weight', type=float, default=0.01, help='weight of the KGE term')
 
     return parser.parse_args()

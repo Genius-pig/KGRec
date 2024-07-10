@@ -79,8 +79,7 @@ def get_feed_dict(args, data, aggregate_set, relation_set, start, end, n_items, 
             neg_items.append(neg_item)
         return neg_items
 
-    feed_dict['neg_items'] = torch.LongTensor(negative_sampling(data,
-                                                                train_user_set)).to(device)
+    feed_dict['neg_items'] = torch.LongTensor(negative_sampling(data[start:end], train_user_set)).to(device)
     memories_h = []
     memories_r = []
     memories_t = []
@@ -120,6 +119,7 @@ if __name__ == '__main__':
     torch.cuda.manual_seed_all(seed)
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = False
+    torch.autograd.set_detect_anomaly(True)
 
     """read args"""
     global args, device
@@ -163,10 +163,10 @@ if __name__ == '__main__':
             while s + args.batch_size <= len(train_cf):
                 batch = get_feed_dict(args, train_cf_shuffle, aggregate_set, relation_set, s, s + args.batch_size,
                                       n_params['n_items'], user_dict['train_user_set'])
-                loss = model(batch)
+                batch_loss = model(batch)
                 batch_loss = batch_loss
                 optimizer.zero_grad()
-                batch_loss.backward()
+                batch_loss.backward(retain_graph=True)
                 optimizer.step()
 
                 loss += batch_loss
