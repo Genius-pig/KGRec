@@ -66,8 +66,8 @@ class KGAN(nn.Module):
             self.r_emb_list.append(self.relation_emb_matrix(memories_r_temp))
             self.t_emb_list.append(self.entity_emb_matrix(memories_t_temp))
         o_list, items_emb_n = self.intra_inter_group_attention(items_emb)
-        scores = self.rating(items_emb_n, o_list)
-        _scores = self.rating(neg_items_emb, o_list)
+        scores = self.compute(items_emb_n, o_list)
+        _scores = self.compute(neg_items_emb, o_list)
         return self.build_loss(scores, _scores)
 
     def intra_inter_group_attention(self, items_emb):
@@ -121,7 +121,7 @@ class KGAN(nn.Module):
 
         return item_embeddings
 
-    def rating(self, item_embeddings, o_list):
+    def compute(self, item_embeddings, o_list):
         y = o_list[-1]
         for i in range(self.n_hops - 1):
             y = y + o_list[i]

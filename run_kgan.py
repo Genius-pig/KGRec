@@ -6,11 +6,13 @@ import random
 
 import numpy as np
 import torch
+from prettytable import PrettyTable
 from tqdm import tqdm
 
 from modules.KGAN.KGAN import KGAN
 from utils.data_loader import load_data_kgan
-from utils.helper import init_logger
+from utils.evaluate import test
+from utils.helper import init_logger, early_stopping
 from utils.parser import parse_args_kgan as parse_args
 
 
@@ -171,5 +173,39 @@ if __name__ == '__main__':
                 loss += batch_loss
                 s += args.batch_size
                 pbar.update(1)
-
         train_e_t = time()
+
+        if epoch >= 1:
+            """testing"""
+            test_s_t = time()
+            ret = test(model, user_dict, n_params)
+            test_e_t = time()
+
+            train_res = PrettyTable()
+            train_res.field_names = ["Epoch", "training time", "tesing time", "Loss", "recall", "ndcg", "precision",
+                                     "hit_ratio"]
+            train_res.add_row(
+                [epoch, train_e_t - train_s_t, test_e_t - test_s_t, loss.item(), ret['recall'], ret['ndcg'],
+                 ret['precision'], ret['hit_ratio']]
+            )
+            logger.info(train_res)
+
+            # *********************************************************
+            # early stopping when cur_best_pre_0 is decreasing for ten successive steps.
+            cur_best_pre_0, stopping_step, should_stop = early_stopping(ret['recall'][0], cur_best_pre_0,
+                                                                        stopping_step, expected_order='acc',
+                                                                        flag_step=10)
+            ndcg = ret['ndcg'][0]
+            if should_stop:
+                break
+
+            """save weight"""
+            if ret['recall'][0] == cur_best_pre_0 and args.save:
+                torch.save(model.state_dict(), args.out_dir + 'model_' + args.dataset + '-KGIN.ckpt')
+
+        else:
+            # logging.info('training loss at epoch %d: %f' % (epoch, loss.item()))
+            logger.info('using time %.4f, training loss at epoch %d: %.4f, cor: %.6f' % (
+            train_e_t - train_s_t, epoch, loss.item(), cor_loss.item()))
+
+    logger.info('early stopping at %d, recall@20:%.4f, ngcg@20:%.4f' % (epoch, cur_best_pre_0, ndcg))
