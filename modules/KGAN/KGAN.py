@@ -130,6 +130,9 @@ class KGAN(nn.Module):
         scores = torch.sum(item_embeddings * y, 1)
         return scores
 
+    def rating(self, u_g_embeddings, i_g_embeddings):
+        return torch.matmul(u_g_embeddings, i_g_embeddings.t())
+
     def init_weight(self):
         initializer = nn.init.xavier_uniform_
         initializer(self.entity_emb_matrix.weight)

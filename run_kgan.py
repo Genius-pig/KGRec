@@ -205,7 +205,7 @@ if __name__ == '__main__':
 
         else:
             # logging.info('training loss at epoch %d: %f' % (epoch, loss.item()))
-            logger.info('using time %.4f, training loss at epoch %d: %.4f, cor: %.6f' % (
-            train_e_t - train_s_t, epoch, loss.item(), cor_loss.item()))
+            logger.info('using time %.4f, training loss at epoch %d: %.4f' % (
+            train_e_t - train_s_t, epoch, loss.item()))
 
     logger.info('early stopping at %d, recall@20:%.4f, ngcg@20:%.4f' % (epoch, cur_best_pre_0, ndcg))
